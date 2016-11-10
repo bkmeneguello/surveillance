@@ -23,9 +23,10 @@ class Queue(object):
             self.queue.append(item)
             self.lock.notify()
 
-    def pop(self):
+    def pop(self, timeout=None):
         with self.lock:
-            self.lock.wait_for(lambda: len(self.queue))
+            if not self.lock.wait_for(lambda: len(self.queue), timeout):
+                raise TimeoutError()
             return self.queue.popleft()
 
 
@@ -62,6 +63,7 @@ class Reader(object):
         self.capture_options = capture_options
         self.bufsize = bufsize
 
+        self.thread = None
         self.running = False
         self.frames = 0
         self.frame_lock = threading.Condition()
@@ -73,27 +75,49 @@ class Reader(object):
                    '-f', 'image2pipe',
                    '-pix_fmt', {3: 'rgb24'}[self.shape[2]],
                    '-vcodec', 'rawvideo', '-']
-        pipe = sp.Popen(command, stdout=sp.PIPE, stderr=sp.DEVNULL, bufsize=self.bufsize)
         self.running = True
+        pipe = None
         while self.running:
-            raw_image = pipe.stdout.read(self.shape[0] * self.shape[1] * self.shape[2])
-            if raw_image is None:
+            raw_image = None
+            if pipe is not None:
+                if pipe.poll() is None:
+                    raw_image = pipe.stdout.read(self.shape[0] * self.shape[1] * self.shape[2])
+                    if not raw_image:
+                        logging.debug('invalid frame data')
+                        continue
+                else:
+                    logging.error('subprocess has died')
+                    stdout, stderr = pipe.communicate()
+                    if stderr:
+                        logging.warning('stderr: {}', stderr)
+                    if stdout:
+                        logging.debug('stdout: {}', stdout)
+                    pipe = None
+                    continue
+            else:
                 pipe = sp.Popen(command, stdout=sp.PIPE, stderr=sp.DEVNULL, bufsize=self.bufsize)
-                logging.error('closed subprocess')
+                logging.info('recording started')
                 continue
-            try:
-                frame = Frame(self.shape, raw_image=raw_image)
-                with self.frame_lock:
-                    self.queue.push(frame)
-                    self.frames += 1
-                    self.frame_lock.notify()
-            except ValueError:
-                logging.exception('invalid frame')
+
+            if raw_image:
+                try:
+                    frame = Frame(self.shape, raw_image=raw_image)
+                    with self.frame_lock:
+                        self.queue.push(frame)
+                        self.frames += 1
+                        self.frame_lock.notify()
+                except ValueError:
+                    logging.exception('invalid frame')
+        logging.info('process terminated')
+        stdout, stderr = pipe.communicate()
+        if stdout:
+            logging.debug('stdout: {}', stdout)
+        if stderr:
+            logging.debug('stderr: {}', stderr)
 
     def start(self):
-        thread = threading.Thread(target=self.run)
-        thread.start()
-        return thread
+        self.thread = threading.Thread(target=self.run)
+        self.thread.start()
 
     def stop(self):
         self.running = False
@@ -102,75 +126,100 @@ class Reader(object):
         with self.frame_lock:
             return self.frame_lock.wait_for(lambda: self.frames)
 
+    def wait_finish(self, timeout=None):
+        self.thread.join(timeout)
+        if self.running:
+            raise TimeoutError
+
 
 class Writer(object):
-    def __init__(self, queue, target, shape, fps=24, codec='mpeg2video', codec_options=None, bufsize=10 ** 8):
+    def __init__(self, queue, target, fps=24, codec='mpeg2video', codec_options=None, bufsize=10 ** 8):
         self.queue = queue
         self.target = target
-        self.shape = shape
         self.fps = fps
         self.codec = codec
         self.codec_options = codec_options
         self.bufsize = bufsize
 
+        self.thread = None
         self.last_frame = None
         self.frame_time_overflow = 0
         self.frames = 0
         self.running = False
 
     def run(self):
-        command = [FFMPEG_BIN,
+        frame_duration = 1 / self.fps
+        pipe = None
+        self.running = True
+        while self.running:
+            try:
+                frame = self.queue.pop(timeout=1)
+            except TimeoutError:
+                continue
+
+            if pipe is None:
+                command = [FFMPEG_BIN,
                    '-y',  # (optional) overwrite output file if it exists
                    '-f', 'rawvideo',
                    '-vcodec', 'rawvideo',
-                   '-s', str(self.shape[0]) + 'x' + str(self.shape[1]),  # size of one frame
-                   '-pix_fmt', {3: 'rgb24'}[self.shape[2]],
+                   '-s', str(frame.shape[0]) + 'x' + str(frame.shape[1]),  # size of one frame
+                   '-pix_fmt', {3: 'rgb24'}[frame.shape[2]],
                    '-r', str(self.fps),  # frames per second
                    '-i', '-'] + \
                   (self.codec_options or []) + \
                   ['-vcodec', self.codec,
                    self.target]
+                pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.PIPE, bufsize=self.bufsize)
 
-        frame_duration = 1 / self.fps
-        pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.PIPE, bufsize=self.bufsize)
-        self.running = True
-        while self.running:
-            frame = self.queue.pop()
             now = frame.time
             delta = now - (self.last_frame or now) + self.frame_time_overflow
             frames_per_frame = int(delta / frame_duration)
             self.frame_time_overflow = delta - (frames_per_frame * frame_duration)
             if frames_per_frame:
-                logging.debug('%d %f %f', frames_per_frame, delta / frame_duration, delta)
+                logging.debug('writen frames: %d [frames span: %f, delta: %f]', frames_per_frame, delta / frame_duration, delta)
             else:
-                logging.debug('discarded %f %f', delta / frame_duration, delta)
+                logging.debug('discarded frame [frames span: %f, delta: %f]', delta / frame_duration, delta)
+
             for i in range(0, frames_per_frame):
-                pipe.stdin.write(frame.tobytes())
-                self.frames += 1
+                try:
+                    pipe.stdin.write(frame.tobytes())
+                    self.frames += 1
+                except BrokenPipeError:
+                    logging.warning('writer process unavailable')
             self.last_frame = now
-        pipe.communicate()
+        logging.info('process terminated')
+        stdout, stderr = pipe.communicate()
+        if stdout:
+            logging.debug('stdout: {}', stdout)
+        if stderr:
+            logging.debug('stderr: {}', stderr)
 
     def start(self):
-        thread = threading.Thread(target=self.run)
-        thread.start()
-        return thread
+        self.thread = threading.Thread(target=self.run)
+        self.thread.start()
 
     def stop(self):
         self.running = False
 
+    def wait_finish(self, timeout=None):
+        self.thread.join(timeout)
+        if self.running:
+            raise TimeoutError
+
 
 class PeriodicWriter(object):
-    def __init__(self, period, queue, target_pattern, shape, fps=24, codec='mpeg2video', codec_options=None,
+    def __init__(self, period, queue, target_pattern, fps=24, codec='mpeg2video', codec_options=None,
                  bufsize=10 ** 8):
         self.period = period
         self.queue = queue
         self.target_pattern = target_pattern
-        self.shape = shape
         self.fps = fps
         self.codec = codec
         self.codec_options = codec_options
         self.bufsize = bufsize
 
+        self.writer = None
+        self.thread = None
         self.running = False
 
     def run(self):
@@ -180,18 +229,26 @@ class PeriodicWriter(object):
             target = self.target_pattern.format(now=datetime.now(), sequence=sequence)
             dirname = os.path.dirname(target)
             os.makedirs(dirname, exist_ok=True)
-            writer = Writer(self.queue, target, self.shape, fps=self.fps, codec=self.codec,
+            self.writer = Writer(self.queue, target, fps=self.fps, codec=self.codec,
                             codec_options=self.codec_options, bufsize=self.bufsize)
-            writer.start()
-            time.sleep(self.period)
-            writer.stop()
-            logging.info('new file %s', target)
-            sequence += 1
+            self.writer.start()
+            try:
+                self.writer.wait_finish(self.period)
+            except TimeoutError:
+                self.writer.stop()
+                logging.info('new file %s', target)
+                sequence += 1
 
     def start(self):
-        thread = threading.Thread(target=self.run)
-        thread.start()
-        return thread
+        self.thread = threading.Thread(target=self.run)
+        self.thread.start()
 
     def stop(self):
         self.running = False
+        self.writer.stop()
+
+    def wait_finish(self, timeout=None):
+        self.thread.join(timeout)
+        if self.running:
+            raise TimeoutError
+
