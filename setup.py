@@ -8,5 +8,5 @@ setup(name='surveillance',
       author='Bruno Meneguello',
       author_email='bruno@meneguello.com',
       packages=['surveillance'],
-      install_requires=['pyyaml', 'numpy']
+      install_requires=['pyyaml', 'numpy', 'imageio', 'Jinja2']
       )

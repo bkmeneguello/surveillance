@@ -1,11 +1,12 @@
 import logging
 import os
 import subprocess as sp
-import threading
 from datetime import datetime
 
+from .service import Service
 
-class Writer(threading.Thread):
+
+class Writer(Service):
     def __init__(self, queue, target, fps=24, codec='mpeg2video', codec_options=None, bufsize=10 ** 8):
         super().__init__()
         self.queue = queue
@@ -18,7 +19,6 @@ class Writer(threading.Thread):
         self.last_frame = None
         self.frame_time_overflow = 0
         self.frames = 0
-        self.running = False
 
     def run(self):
         frame_duration = 1 / self.fps
@@ -68,16 +68,8 @@ class Writer(threading.Thread):
         if stderr:
             logging.debug('stderr: {}', stderr)
 
-    def stop(self):
-        self.running = False
 
-    def wait_finish(self, timeout=None):
-        self.join(timeout)
-        if self.running:
-            raise TimeoutError
-
-
-class PeriodicWriter(threading.Thread):
+class PeriodicWriter(Service):
     def __init__(self, period, queue, target_pattern, fps=24, codec='mpeg2video', codec_options=None, bufsize=10 ** 8):
         super().__init__()
         self.period = period
@@ -89,7 +81,6 @@ class PeriodicWriter(threading.Thread):
         self.bufsize = bufsize
 
         self.writer = None
-        self.running = False
 
     def run(self):
         sequence = 1
@@ -109,10 +100,5 @@ class PeriodicWriter(threading.Thread):
                 sequence += 1
 
     def stop(self):
-        self.running = False
+        super().stop()
         self.writer.stop()
-
-    def wait_finish(self, timeout=None):
-        self.join(timeout)
-        if self.running:
-            raise TimeoutError

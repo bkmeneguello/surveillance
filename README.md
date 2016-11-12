@@ -39,6 +39,11 @@ services:
 - More info about this syntax in [PyYAML site](http://pyyaml.org/wiki/PyYAMLDocumentation#YAMLsyntax)
 - More info about codecs and capture/encode options in [ffmpeg site](https://www.ffmpeg.org/ffmpeg.html)
 
+To enable the web viewer, add the following configuration:
+```
+  - !!python/object/apply:surveillance.web.Viewer [{'desk': *Q1}]
+```
+
 ### Run
 
 ```

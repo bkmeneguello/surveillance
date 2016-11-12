@@ -3,9 +3,10 @@ import subprocess as sp
 import threading
 
 from .frame import Frame
+from .service import Service
 
 
-class Reader(threading.Thread):
+class Reader(Service):
     def __init__(self, queue, source, shape, capture_options=None, bufsize=10 ** 8):
         super().__init__()
         self.queue = queue
@@ -14,7 +15,6 @@ class Reader(threading.Thread):
         self.capture_options = capture_options
         self.bufsize = bufsize
 
-        self.running = False
         self.frames = 0
         self.frame_lock = threading.Condition()
 
@@ -65,14 +65,6 @@ class Reader(threading.Thread):
         if stderr:
             logging.debug('stderr: {}', stderr)
 
-    def stop(self):
-        self.running = False
-
     def wait_first_frame(self):
         with self.frame_lock:
             return self.frame_lock.wait_for(lambda: self.frames)
-
-    def wait_finish(self, timeout=None):
-        self.join(timeout)
-        if self.running:
-            raise TimeoutError
