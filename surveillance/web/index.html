@@ -8,5 +8,14 @@
 {% for source in sources %}
 <img src="/capture/{{source}}.png"/>
 {% endfor %}
+<script type="text/javascript" src="https://code.jquery.com/jquery-3.1.1.slim.min.js"></script>
+<script type="text/javascript">
+$(function() {
+    $('img').on('load', function(evt) {
+        var img = $(evt.target);
+        img.attr('src', img.attr('src').split('?')[0] + '?' + new Date().getTime())
+    });
+})
+</script>
 </body>
 </html>

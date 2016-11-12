@@ -14,11 +14,13 @@ class MyHTTPServer(HTTPServer):
 
 class MyRequesHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        path, query = self.path.rsplit('?', 1) if '?' in self.path else (self.path, '')
+        path, href = path.rsplit('#', 1) if '#' in path else (path, '')
         try:
-            if self.path == '/':
-                self.path = '/index.html'
-            if self.path.startswith('/capture/') and self.path.endswith('.png'):
-                prefix, filename = self.path.rsplit('/', 1)
+            if path == '/':
+                path = '/index.html'
+            if path.startswith('/capture/') and path.endswith('.png'):
+                prefix, filename = path.rsplit('/', 1)
                 queue, _ = filename.rsplit('.png')
 
                 im = self.server.queues[queue].pop().ndarray
@@ -27,16 +29,16 @@ class MyRequesHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(imageio.imwrite(imageio.RETURN_BYTES, im, format='PNG'))
                 return
-            if self.path.endswith('.html'):
+            if path.endswith('.html'):
                 self.send_response(200)
                 self.send_header('Content-type', 'text/html')
                 self.end_headers()
-                tpl = pkg_resources.resource_string('surveillance.web', self.path)
+                tpl = pkg_resources.resource_string('surveillance.web', path)
                 tpl = Template(tpl.decode('utf-8'))
                 self.wfile.write(str.encode(tpl.render(sources=self.server.queues.keys())))
                 return
         except IOError:
-            self.send_error(404, 'File Not Found: %s' % self.path)
+            self.send_error(404, 'File Not Found: %s' % path)
 
 
 class Viewer(Service):
