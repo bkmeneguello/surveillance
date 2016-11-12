@@ -22,10 +22,8 @@ def main():
 
     def shutdown():
         logging.info('shutting down')
-        for service in config.get('services', []):
-            service.stop()
-        for service in config.get('services', []):
-            service.wait_finish()
+        map(lambda s: s.stop(), config.get('services', []))
+        map(lambda s: s.wait_finish(), config.get('services', []))
 
     atexit.register(shutdown)
 
