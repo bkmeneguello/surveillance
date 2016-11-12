@@ -55,15 +55,15 @@ class Frame(object):
         return self.ndarray.tobytes()
 
 
-class Reader(object):
+class Reader(threading.Thread):
     def __init__(self, queue, source, shape, capture_options=None, bufsize=10 ** 8):
+        super().__init__()
         self.queue = queue
         self.source = source
         self.shape = shape
         self.capture_options = capture_options
         self.bufsize = bufsize
 
-        self.thread = None
         self.running = False
         self.frames = 0
         self.frame_lock = threading.Condition()
@@ -115,10 +115,6 @@ class Reader(object):
         if stderr:
             logging.debug('stderr: {}', stderr)
 
-    def start(self):
-        self.thread = threading.Thread(target=self.run)
-        self.thread.start()
-
     def stop(self):
         self.running = False
 
@@ -127,13 +123,14 @@ class Reader(object):
             return self.frame_lock.wait_for(lambda: self.frames)
 
     def wait_finish(self, timeout=None):
-        self.thread.join(timeout)
+        self.join(timeout)
         if self.running:
             raise TimeoutError
 
 
-class Writer(object):
+class Writer(threading.Thread):
     def __init__(self, queue, target, fps=24, codec='mpeg2video', codec_options=None, bufsize=10 ** 8):
+        super().__init__()
         self.queue = queue
         self.target = target
         self.fps = fps
@@ -141,7 +138,6 @@ class Writer(object):
         self.codec_options = codec_options
         self.bufsize = bufsize
 
-        self.thread = None
         self.last_frame = None
         self.frame_time_overflow = 0
         self.frames = 0
@@ -159,16 +155,16 @@ class Writer(object):
 
             if pipe is None:
                 command = [FFMPEG_BIN,
-                   '-y',  # (optional) overwrite output file if it exists
-                   '-f', 'rawvideo',
-                   '-vcodec', 'rawvideo',
-                   '-s', str(frame.shape[0]) + 'x' + str(frame.shape[1]),  # size of one frame
-                   '-pix_fmt', {3: 'rgb24'}[frame.shape[2]],
-                   '-r', str(self.fps),  # frames per second
-                   '-i', '-'] + \
-                  (self.codec_options or []) + \
-                  ['-vcodec', self.codec,
-                   self.target]
+                           '-y',  # (optional) overwrite output file if it exists
+                           '-f', 'rawvideo',
+                           '-vcodec', 'rawvideo',
+                           '-s', str(frame.shape[0]) + 'x' + str(frame.shape[1]),  # size of one frame
+                           '-pix_fmt', {3: 'rgb24'}[frame.shape[2]],
+                           '-r', str(self.fps),  # frames per second
+                           '-i', '-'] + \
+                          (self.codec_options or []) + \
+                          ['-vcodec', self.codec,
+                           self.target]
                 pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.PIPE, bufsize=self.bufsize)
 
             now = frame.time
@@ -176,7 +172,8 @@ class Writer(object):
             frames_per_frame = int(delta / frame_duration)
             self.frame_time_overflow = delta - (frames_per_frame * frame_duration)
             if frames_per_frame:
-                logging.debug('writen frames: %d [frames span: %f, delta: %f]', frames_per_frame, delta / frame_duration, delta)
+                logging.debug('writen frames: %d [frames span: %f, delta: %f]', frames_per_frame,
+                              delta / frame_duration, delta)
             else:
                 logging.debug('discarded frame [frames span: %f, delta: %f]', delta / frame_duration, delta)
 
@@ -194,22 +191,18 @@ class Writer(object):
         if stderr:
             logging.debug('stderr: {}', stderr)
 
-    def start(self):
-        self.thread = threading.Thread(target=self.run)
-        self.thread.start()
-
     def stop(self):
         self.running = False
 
     def wait_finish(self, timeout=None):
-        self.thread.join(timeout)
+        self.join(timeout)
         if self.running:
             raise TimeoutError
 
 
-class PeriodicWriter(object):
-    def __init__(self, period, queue, target_pattern, fps=24, codec='mpeg2video', codec_options=None,
-                 bufsize=10 ** 8):
+class PeriodicWriter(threading.Thread):
+    def __init__(self, period, queue, target_pattern, fps=24, codec='mpeg2video', codec_options=None, bufsize=10 ** 8):
+        super().__init__()
         self.period = period
         self.queue = queue
         self.target_pattern = target_pattern
@@ -219,7 +212,6 @@ class PeriodicWriter(object):
         self.bufsize = bufsize
 
         self.writer = None
-        self.thread = None
         self.running = False
 
     def run(self):
@@ -230,7 +222,7 @@ class PeriodicWriter(object):
             dirname = os.path.dirname(target)
             os.makedirs(dirname, exist_ok=True)
             self.writer = Writer(self.queue, target, fps=self.fps, codec=self.codec,
-                            codec_options=self.codec_options, bufsize=self.bufsize)
+                                 codec_options=self.codec_options, bufsize=self.bufsize)
             self.writer.start()
             try:
                 self.writer.wait_finish(self.period)
@@ -239,16 +231,11 @@ class PeriodicWriter(object):
                 logging.info('new file %s', target)
                 sequence += 1
 
-    def start(self):
-        self.thread = threading.Thread(target=self.run)
-        self.thread.start()
-
     def stop(self):
         self.running = False
         self.writer.stop()
 
     def wait_finish(self, timeout=None):
-        self.thread.join(timeout)
+        self.join(timeout)
         if self.running:
             raise TimeoutError
-

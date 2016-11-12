@@ -47,6 +47,7 @@ $ docker run -d -v `pwd`/surveillance.conf:/etc/surveillance.conf:ro \
                 -v /etc/localtime:/etc/localtime:ro \
                 --device /dev/video0 \
                 --name surveillance \
+                -e TZ=America/Sao_Paulo \
                 surveillance -l -
 ```
 Notice the _device_ option to allow non-privileged containers to access your host's camera device. It's only useful to USB camera capture.  

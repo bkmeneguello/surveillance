@@ -2,7 +2,7 @@
 
 from setuptools import setup
 
-setup(name='Surveillance',
+setup(name='surveillance',
       version='1.0',
       description='Surveillance System',
       author='Bruno Meneguello',
