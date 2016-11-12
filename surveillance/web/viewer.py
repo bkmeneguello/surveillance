@@ -2,6 +2,7 @@ import pkg_resources
 import imageio
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from jinja2 import Template
+import gzip
 
 from ..service import Service
 
@@ -12,6 +13,9 @@ class MyHTTPServer(HTTPServer):
         self.queues = queues
 
 
+MIMETYPE_EXT = {'png': 'image/png', 'jpg': 'image/jpeg'}
+
+
 class MyRequesHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path, query = self.path.rsplit('?', 1) if '?' in self.path else (self.path, '')
@@ -19,15 +23,21 @@ class MyRequesHandler(BaseHTTPRequestHandler):
         try:
             if path == '/':
                 path = '/index.html'
-            if path.startswith('/capture/') and path.endswith('.png'):
+            if path.startswith('/capture/') and (path.endswith(('.png', '.jpg'))):
                 prefix, filename = path.rsplit('/', 1)
-                queue, _ = filename.rsplit('.png')
+                queue, ext = filename.rsplit('.')
 
                 im = self.server.queues[queue].pop().ndarray
                 self.send_response(200)
-                self.send_header('Content-type', 'image/png')
+                enc_gz = 'gzip' in self.headers.get('Accept-Encoding', '')
+                self.send_header('Content-type', MIMETYPE_EXT[ext])
+                if enc_gz:
+                    self.send_header('Content-Encoding', 'gzip')
                 self.end_headers()
-                self.wfile.write(imageio.imwrite(imageio.RETURN_BYTES, im, format='PNG'))
+                im_bytes = imageio.imwrite(imageio.RETURN_BYTES, im, format=ext)
+                if enc_gz:
+                    im_bytes = gzip.compress(im_bytes)
+                self.wfile.write(im_bytes)
                 return
             if path.endswith('.html'):
                 self.send_response(200)
