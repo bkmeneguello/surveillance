@@ -5,19 +5,72 @@
     <title>Surveillance</title>
 </head>
 <body>
+<form id="settings">
+    <fieldset>
+        <legend>Scale:</legend>
+        <input id="scale1" type="radio" name="scale" value="1" checked/>
+        <label for="scale1">1x</label>
+        <input id="scale080" type="radio" name="scale" value="4/5"/>
+        <label for="scale080">4/5x</label>
+        <input id="scale075" type="radio" name="scale" value="3/4"/>
+        <label for="scale075">3/4x</label>
+        <input id="scale050" type="radio" name="scale" value="1/2"/>
+        <label for="scale050">1/2x</label>
+        <input id="scale025" type="radio" name="scale" value="1/4"/>
+        <label for="scale025">1/4x</label>
+    </fieldset>
+    <fieldset>
+        <legend>Max FPS:</legend>
+        <input id="fpsUnbounded" type="radio" name="fps" value="0"/>
+        <label for="fpsUnbounded">Unbounded</label>
+        <input id="fps10" type="radio" name="fps" value="10"/>
+        <label for="fps10">10</label>
+        <input id="fps5" type="radio" name="fps" value="5"/>
+        <label for="fps5">5</label>
+        <input id="fps1" type="radio" name="fps" value="1" checked/>
+        <label for="fps1">1</label>
+        <input id="fps05" type="radio" name="fps" value="1/5"/>
+        <label for="fps05">1/5</label>
+        <input id="fps01" type="radio" name="fps" value="1/10"/>
+        <label for="fps01">1/10</label>
+    </fieldset>
+</form>
 {% for source in sources %}
 <img src="/capture/{{source}}.jpg"/>
 {% endfor %}
 <script type="text/javascript" src="https://code.jquery.com/jquery-3.1.1.slim.min.js"></script>
 <script type="text/javascript">
+function parse_rational(value) {
+    if (value && !isNaN(value)) {
+        return parseInt(value);
+    } else if (!!~value.indexOf('/')) {
+        value = value.split('/');
+        return parseFloat(value[0]) / parseFloat(value[1]);
+    }
+    return 0;
+}
 function update() {
-    var img = $(this)
-    img.attr('src', img.attr('src').split('?')[0] + '?' + new Date().getTime());
+    var img = $(this);
+    var now = new Date().getTime();
+    var lastUpdate = img.data('lastUpdate');
+    if (!lastUpdate) {
+        lastUpdate = now;
+        img.data('lastUpdate', lastUpdate);
+    }
+    var fps = parse_rational($('input[name=fps]:checked').val());
+    if (!fps || now - lastUpdate > 1000/fps) {
+        var settings = $('#settings').serialize();
+        img.attr({'width': img.get(0).naturalWidth + 'px', 'height': img.get(0).naturalHeight + 'px'});
+        img.attr('src', img.attr('src').split('?')[0] + '?' + now + (settings ? '&' + settings : ''));
+        img.data('lastUpdate', now);
+    } else {
+        setTimeout($.proxy(update, this));
+    }
 }
 $(function() {
     $('img').on('load error', update)
-        .each(update)
-})
+        .each(update);
+});
 </script>
 </body>
 </html>

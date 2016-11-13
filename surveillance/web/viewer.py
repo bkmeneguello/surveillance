@@ -1,9 +1,11 @@
 import gzip
+import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 import pkg_resources
 from jinja2 import Template
 
+from ..frame import Frame
 from ..service import Service
 
 
@@ -17,9 +19,23 @@ MIMETYPE_EXT = {'png': 'image/png', 'jpg': 'image/jpeg'}
 FORMAT_EXT = {'png': 'png', 'jpg': 'jpeg'}
 
 
+def parse_rational(value):
+    if value.isdigit():
+        return int(value)
+    elif '/' in value:
+        dividend, divisor = value.split('/', 1)
+        if dividend.isdigit() and divisor.isdigit():
+            return int(dividend) / int(divisor)
+
+
 class MyRequesHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        path, query = self.path.rsplit('?', 1) if '?' in self.path else (self.path, '')
+        path = urllib.parse.unquote(self.path)
+        path, query = path.rsplit('?', 1) if '?' in path else (path, '')
+        if query:
+            query = dict((option.split('=') if '=' in option else (option, None)) for option in query.split('&'))
+        else:
+            query = {}
         path, href = path.rsplit('#', 1) if '#' in path else (path, '')
         try:
             if path == '/':
@@ -35,6 +51,10 @@ class MyRequesHandler(BaseHTTPRequestHandler):
                 if enc_gz:
                     self.send_header('Content-Encoding', 'gzip')
                 self.end_headers()
+                scale = parse_rational(query.get('scale', '1').strip())
+                if scale != 1:
+                    shape = [int(frame.shape[0] * scale), int(frame.shape[1] * scale), frame.shape[2]]
+                    frame = Frame(shape, im=frame.toimage().resize((shape[0], shape[1])))
                 im_bytes = frame.tobytes(format=FORMAT_EXT[ext])
                 if enc_gz:
                     im_bytes = gzip.compress(im_bytes)
