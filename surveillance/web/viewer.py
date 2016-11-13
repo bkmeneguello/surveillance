@@ -1,9 +1,7 @@
 import gzip
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from io import BytesIO
 
 import pkg_resources
-from PIL import Image
 from jinja2 import Template
 
 from ..service import Service
@@ -30,17 +28,14 @@ class MyRequesHandler(BaseHTTPRequestHandler):
                 prefix, filename = path.rsplit('/', 1)
                 queue, ext = filename.rsplit('.')
 
-                ndarray = self.server.queues[queue].pop().ndarray
+                frame = self.server.queues[queue].peek()
                 self.send_response(200)
                 enc_gz = 'gzip' in self.headers.get('Accept-Encoding', '')
                 self.send_header('Content-type', MIMETYPE_EXT[ext])
                 if enc_gz:
                     self.send_header('Content-Encoding', 'gzip')
                 self.end_headers()
-                im = Image.fromarray(ndarray)
-                b = BytesIO()
-                im.save(b, format=FORMAT_EXT[ext])
-                im_bytes = b.getvalue()
+                im_bytes = frame.tobytes(format=FORMAT_EXT[ext])
                 if enc_gz:
                     im_bytes = gzip.compress(im_bytes)
                 self.wfile.write(im_bytes)

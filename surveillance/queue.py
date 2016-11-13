@@ -21,6 +21,12 @@ class Queue(object):
                 raise TimeoutError()
             return self.queue.popleft()
 
+    def peek(self, timeout=None):
+        with self.lock:
+            if not self.lock.wait_for(lambda: len(self.queue), timeout):
+                raise TimeoutError()
+            return self.queue[0]
+
 
 class QueueFan(object):
     def __init__(self, *queues):
