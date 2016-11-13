@@ -10,18 +10,14 @@
 {% endfor %}
 <script type="text/javascript" src="https://code.jquery.com/jquery-3.1.1.slim.min.js"></script>
 <script type="text/javascript">
-function update(img) {
+function update() {
+    var img = $(this)
     img.attr('src', img.attr('src').split('?')[0] + '?' + new Date().getTime());
 }
 $(function() {
-    $('img').on('load', function(evt) {
-        update($(evt.target));
-    });
-    $('img').each(function(index, element) {
-        update($(element));
-    })
+    $('img').on('load error', update)
+        .each(update)
 })
-
 </script>
 </body>
 </html>
