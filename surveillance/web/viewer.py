@@ -1,8 +1,10 @@
-import pkg_resources
-import imageio
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from jinja2 import Template
 import gzip
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from io import BytesIO
+
+import pkg_resources
+from PIL import Image
+from jinja2 import Template
 
 from ..service import Service
 
@@ -14,6 +16,7 @@ class MyHTTPServer(HTTPServer):
 
 
 MIMETYPE_EXT = {'png': 'image/png', 'jpg': 'image/jpeg'}
+FORMAT_EXT = {'png': 'png', 'jpg': 'jpeg'}
 
 
 class MyRequesHandler(BaseHTTPRequestHandler):
@@ -27,14 +30,17 @@ class MyRequesHandler(BaseHTTPRequestHandler):
                 prefix, filename = path.rsplit('/', 1)
                 queue, ext = filename.rsplit('.')
 
-                im = self.server.queues[queue].pop().ndarray
+                ndarray = self.server.queues[queue].pop().ndarray
                 self.send_response(200)
                 enc_gz = 'gzip' in self.headers.get('Accept-Encoding', '')
                 self.send_header('Content-type', MIMETYPE_EXT[ext])
                 if enc_gz:
                     self.send_header('Content-Encoding', 'gzip')
                 self.end_headers()
-                im_bytes = imageio.imwrite(imageio.RETURN_BYTES, im, format=ext)
+                im = Image.fromarray(ndarray)
+                b = BytesIO()
+                im.save(b, format=FORMAT_EXT[ext])
+                im_bytes = b.getvalue()
                 if enc_gz:
                     im_bytes = gzip.compress(im_bytes)
                 self.wfile.write(im_bytes)

@@ -1,7 +1,7 @@
 import argparse
+import atexit
 import logging
 import pathlib
-import atexit
 
 import yaml
 
@@ -12,7 +12,7 @@ def main():
     parser.add_argument('-l', '--log', default='/var/log/surveillance.log', help='log file path')
     args = parser.parse_args()
 
-    logging.basicConfig(filename=args.log if args.log.strip() != '-' else None,  level=logging.INFO)
+    logging.basicConfig(filename=args.log if args.log.strip() != '-' else None, level=logging.INFO)
 
     config = {}
     with pathlib.Path(args.config) as conf_path:
