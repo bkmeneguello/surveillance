@@ -1,44 +1,81 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>Surveillance</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css"/>
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap-theme.min.css"/>
+    <style type="text/css">
+        .flex {
+            display: flex;
+            flex-flow: row wrap;
+        }
+        img {
+            height: 100%;
+        }
+
+    </style>
 </head>
 <body>
-<form id="settings">
-    <fieldset>
-        <legend>Scale:</legend>
-        <input id="scale1" type="radio" name="scale" value="1" checked/>
-        <label for="scale1">1x</label>
-        <input id="scale080" type="radio" name="scale" value="4/5"/>
-        <label for="scale080">4/5x</label>
-        <input id="scale075" type="radio" name="scale" value="3/4"/>
-        <label for="scale075">3/4x</label>
-        <input id="scale050" type="radio" name="scale" value="1/2"/>
-        <label for="scale050">1/2x</label>
-        <input id="scale025" type="radio" name="scale" value="1/4"/>
-        <label for="scale025">1/4x</label>
-    </fieldset>
-    <fieldset>
-        <legend>Max FPS:</legend>
-        <input id="fpsUnbounded" type="radio" name="fps" value="0"/>
-        <label for="fpsUnbounded">Unbounded</label>
-        <input id="fps10" type="radio" name="fps" value="10"/>
-        <label for="fps10">10</label>
-        <input id="fps5" type="radio" name="fps" value="5"/>
-        <label for="fps5">5</label>
-        <input id="fps1" type="radio" name="fps" value="1" checked/>
-        <label for="fps1">1</label>
-        <input id="fps05" type="radio" name="fps" value="1/5"/>
-        <label for="fps05">1/5</label>
-        <input id="fps01" type="radio" name="fps" value="1/10"/>
-        <label for="fps01">1/10</label>
-    </fieldset>
-</form>
-{% for source in sources %}
-<img src="/capture/{{source}}.jpg"/>
-{% endfor %}
+<div class="container">
+    <div class="flex row">
+        {% for source in sources %}
+        <img src="/capture/{{source}}.jpg" class="col-xs-12 col-sm-12"/>
+        {% endfor %}
+    </div>
+    <form id="settings">
+        <fieldset>
+            <legend>Scale:</legend>
+            <input id="scale1" type="radio" name="scale" value="1" checked/>
+            <label for="scale1">1x</label>
+            <input id="scale080" type="radio" name="scale" value="4/5"/>
+            <label for="scale080">4/5x</label>
+            <input id="scale075" type="radio" name="scale" value="3/4"/>
+            <label for="scale075">3/4x</label>
+            <input id="scale050" type="radio" name="scale" value="1/2"/>
+            <label for="scale050">1/2x</label>
+            <input id="scale025" type="radio" name="scale" value="1/4"/>
+            <label for="scale025">1/4x</label>
+        </fieldset>
+        <fieldset>
+            <legend>Max FPS:</legend>
+            <input id="fpsUnbounded" type="radio" name="fps" value="0"/>
+            <label for="fpsUnbounded">Unbounded</label>
+            <input id="fps10" type="radio" name="fps" value="10"/>
+            <label for="fps10">10</label>
+            <input id="fps5" type="radio" name="fps" value="5"/>
+            <label for="fps5">5</label>
+            <input id="fps1" type="radio" name="fps" value="1" checked/>
+            <label for="fps1">1</label>
+            <input id="fps05" type="radio" name="fps" value="1/5"/>
+            <label for="fps05">1/5</label>
+            <input id="fps01" type="radio" name="fps" value="1/10"/>
+            <label for="fps01">1/10</label>
+        </fieldset>
+        {% if sources|length > 1 %}
+        <fieldset class="hidden-xs">
+            <legend>Columns:</legend>
+            <input id="layout1" type="radio" name="layout" value="1" checked/>
+            <label for="layout1">1</label>
+            <input id="layout2" type="radio" name="layout" value="2"/>
+            <label for="layout2">2</label>
+            {% if sources|length > 2 %}
+            <input id="layout3" type="radio" name="layout" value="3"/>
+            <label for="layout3">3</label>
+            {% if sources|length > 3 %}
+            <input id="layout4" type="radio" name="layout" value="4"/>
+            <label for="layout4">4</label>
+            {% endif %}
+            {% endif %}
+        </fieldset>
+        {% endif %}
+    </form>
+</div>
 <script type="text/javascript" src="https://code.jquery.com/jquery-3.1.1.slim.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
 <script type="text/javascript">
 function parse_rational(value) {
     if (value && !isNaN(value)) {
@@ -60,7 +97,6 @@ function update() {
     var fps = parse_rational($('input[name=fps]:checked').val());
     if (!fps || now - lastUpdate > 1000/fps) {
         var settings = $('#settings').serialize();
-        img.attr({'width': img.get(0).naturalWidth + 'px', 'height': img.get(0).naturalHeight + 'px'});
         img.attr('src', img.attr('src').split('?')[0] + '?' + now + (settings ? '&' + settings : ''));
         img.data('lastUpdate', now);
     } else {
@@ -70,6 +106,14 @@ function update() {
 $(function() {
     $('img').on('load error', update)
         .each(update);
+    $('input[name=layout]').on('change', function() {
+        var colClass = 12 / parseInt($(this).val());
+        $('img').toggleClass('col-sm-3', false);
+        $('img').toggleClass('col-sm-4', false);
+        $('img').toggleClass('col-sm-6', false);
+        $('img').toggleClass('col-sm-12', false);
+        $('img').toggleClass('col-sm-' + colClass, true);
+    }).filter(':checked').change();
 });
 </script>
 </body>
