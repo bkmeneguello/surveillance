@@ -9,5 +9,5 @@ setup(name='surveillance',
       author_email='bruno@meneguello.com',
       packages=find_packages(),
       include_package_data=True,
-      install_requires=['pyyaml', 'numpy', 'Pillow', 'Jinja2']
+      install_requires=['pyyaml', 'numpy', 'Pillow', 'Jinja2', 'statsd']
       )
