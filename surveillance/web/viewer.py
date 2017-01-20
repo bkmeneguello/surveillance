@@ -1,3 +1,4 @@
+import base64
 import gzip
 import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -11,12 +12,19 @@ from ..service import Service
 
 
 class MyHTTPServer(HTTPServer):
-    def __init__(self, server_address, RequestHandlerClass, viewer):
+    def __init__(self, server_address, RequestHandlerClass, viewer, auth):
         super().__init__(server_address, RequestHandlerClass)
         self.viewer = viewer
+        self.auth = auth
 
 
-MIMETYPE_EXT = {'png': 'image/png', 'jpg': 'image/jpeg'}
+MIMETYPE_EXT = {
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'js': 'application/javascript',
+    'html': 'text/html',
+    'css': 'text/css'
+}
 FORMAT_EXT = {'png': 'png', 'jpg': 'jpeg'}
 
 
@@ -31,6 +39,12 @@ def parse_rational(value):
 
 class MyRequesHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.server.auth is not None:
+            key = str(base64.b64encode(bytes(self.server.auth, 'utf-8')), 'utf-8')
+            if self.headers.get('Authorization') != 'Basic ' + key:
+                self.auth_reject()
+                return
+
         with stats.timer(self.server.viewer.stats_response):
             path = urllib.parse.unquote(self.path)
             path, query = path.rsplit('?', 1) if '?' in path else (path, '')
@@ -74,17 +88,31 @@ class MyRequesHandler(BaseHTTPRequestHandler):
                     tpl = Template(tpl.decode('utf-8'))
                     self.wfile.write(str.encode(tpl.render(sources=self.server.viewer.queues.keys())))
                     return
+                if path.startswith('/static/'):
+                    self.send_response(200)
+                    _, ext = path.rsplit('.')
+                    self.send_header('Content-type', MIMETYPE_EXT.get(ext, 'text/plain'))
+                    self.end_headers()
+                    static = pkg_resources.resource_string('surveillance.web', path)
+                    self.wfile.write(static)
             except IOError:
                 self.send_error(404, 'File Not Found: %s' % path)
 
+    def auth_reject(self):
+        self.send_response(401)
+        self.send_header('WWW-Authenticate', 'Basic realm="' + self.server.viewer.name + '"')
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+
 
 class Viewer(Service):
-    def __init__(self, name, queues, host='127.0.0.1', port=8080):
+    def __init__(self, name, queues, host='127.0.0.1', port=8080, auth=None):
         super().__init__()
         self.name = name
         self.queues = queues
         self.host = host
         self.port = port
+        self.auth = auth
 
         self.server = None
 
@@ -96,7 +124,7 @@ class Viewer(Service):
         self.stats_write = self.__stats_tpl.format('write')
 
     def run(self):
-        self.server = MyHTTPServer((self.host, self.port), MyRequesHandler, self)
+        self.server = MyHTTPServer((self.host, self.port), MyRequesHandler, self, self.auth)
         self.server.serve_forever()
 
     def stop(self):

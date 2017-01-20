@@ -76,6 +76,7 @@
 </div>
 <script type="text/javascript" src="https://code.jquery.com/jquery-3.1.1.slim.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
+<script type="text/javascript" src="static/js/jquery.fullscreen-min.js"></script>
 <script type="text/javascript">
 function parse_rational(value) {
     if (value && !isNaN(value)) {
@@ -103,8 +104,14 @@ function update() {
         setTimeout($.proxy(update, this));
     }
 }
+function fullscreen() {
+    //TODO: keep aspect ratio
+    $(this).toggleFullScreen()
+}
 $(function() {
-    $('img').on('load error', update)
+    $('img')
+        .on('load error', update)
+        .on('click touch', fullscreen)
         .each(update);
     $('input[name=layout]').on('change', function() {
         var colClass = 12 / parseInt($(this).val());
