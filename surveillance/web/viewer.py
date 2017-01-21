@@ -90,7 +90,7 @@ class MyRequesHandler(BaseHTTPRequestHandler):
                     return
                 if path.startswith('/static/'):
                     self.send_response(200)
-                    _, ext = path.rsplit('.')
+                    _, ext = path.rsplit('.', 1)
                     self.send_header('Content-type', MIMETYPE_EXT.get(ext, 'text/plain'))
                     self.end_headers()
                     static = pkg_resources.resource_string('surveillance.web', path)

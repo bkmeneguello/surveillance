@@ -13,17 +13,21 @@
             display: flex;
             flex-flow: row wrap;
         }
-        img {
-            height: 100%;
+        .capture {
+            overflow: auto;
         }
-
+        img {
+            width: 100%;
+        }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="flex row">
         {% for source in sources %}
-        <img src="/capture/{{source}}.jpg" class="col-xs-12 col-sm-12"/>
+        <div class="capture col-xs-12 col-sm-12">
+            <img src="/capture/{{source}}.jpg"/>
+        </div>
         {% endfor %}
     </div>
     <form id="settings">
@@ -106,7 +110,7 @@ function update() {
 }
 function fullscreen() {
     //TODO: keep aspect ratio
-    $(this).toggleFullScreen()
+    $($(this).parent()).toggleFullScreen()
 }
 $(function() {
     $('img')
@@ -115,11 +119,12 @@ $(function() {
         .each(update);
     $('input[name=layout]').on('change', function() {
         var colClass = 12 / parseInt($(this).val());
-        $('img').toggleClass('col-sm-3', false);
-        $('img').toggleClass('col-sm-4', false);
-        $('img').toggleClass('col-sm-6', false);
-        $('img').toggleClass('col-sm-12', false);
-        $('img').toggleClass('col-sm-' + colClass, true);
+        var parent = $($('img').parent())
+        parent.toggleClass('col-sm-3', false);
+        parent.toggleClass('col-sm-4', false);
+        parent.toggleClass('col-sm-6', false);
+        parent.toggleClass('col-sm-12', false);
+        parent.toggleClass('col-sm-' + colClass, true);
     }).filter(':checked').change();
 });
 </script>
