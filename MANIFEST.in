@@ -1,1 +1,2 @@
 include surveillance/web/*.html
+recursive-include surveillance/web/static *
